@@ -170,7 +170,7 @@ function fileExtensionFromSignature(buffer) {
   return null;
 }
 
-function buildApp(pool) {
+function buildApp(pool, databaseReady = Promise.resolve()) {
   const app = express();
   const store = new MySQLStore({
     host: process.env.MYSQL_HOST,
@@ -186,6 +186,10 @@ function buildApp(pool) {
   store.on("error", error => console.error("Session store error:", error.message));
 
   app.disable("x-powered-by");
+  app.use(asyncRoute(async (req, res, next) => {
+    await databaseReady;
+    next();
+  }));
   if (process.env.TRUST_PROXY === "true") app.set("trust proxy", 1);
   app.use(helmet({
     contentSecurityPolicy: {
@@ -439,6 +443,34 @@ function buildApp(pool) {
   return app;
 }
 
+function createVercelApp() {
+  const app = express();
+  let handler;
+
+  app.use((req, res, next) => {
+    if (!handler) {
+      try {
+        requiredSessionSecret();
+        const pool = createPool();
+        handler = buildApp(pool, initializeDatabase(pool));
+      } catch (error) {
+        return next(error);
+      }
+    }
+    return handler(req, res, next);
+  });
+  app.use((error, req, res, next) => {
+    console.error("Could not start the CMS:", error.message);
+    if (res.headersSent) return next(error);
+    if (req.path.startsWith("/api/")) {
+      return res.status(500).json({ error: "The service could not be initialized." });
+    }
+    res.status(500).send("The service could not be initialized.");
+  });
+
+  return app;
+}
+
 async function main() {
   requiredSessionSecret();
   const pool = createPool();
@@ -448,7 +480,11 @@ async function main() {
   app.listen(port, () => console.log(`School CMS available at http://localhost:${port}`));
 }
 
-main().catch(error => {
-  console.error("Could not start the CMS:", error.message);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch(error => {
+    console.error("Could not start the CMS:", error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { createVercelApp };

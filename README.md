@@ -58,6 +58,14 @@ Use the Express server for the website. Static hosting and VS Code Live Server d
 
 The public contact and admission forms currently provide browser-side validation only; they do not deliver submissions to the school. A server-side form endpoint and delivery workflow must be implemented before relying on them.
 
+## Vercel deployment
+
+- Connect the GitHub repository and select the **Express** framework preset. Use `./` as the root directory; leave build and output directory overrides empty.
+- Configure `NODE_ENV=production`, `TRUST_PROXY=true`, `SESSION_SECRET`, `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` in the Vercel project settings. Generate a unique session secret; never commit these values.
+- Use a hosted MySQL database reachable from Vercel. `127.0.0.1` refers to the Vercel function itself, not the development computer.
+- Run `npm run create-admin` against the hosted database to create the first CMS administrator.
+- The Vercel filesystem is not persistent. The current CMS upload route writes to `uploads/`, so configure persistent object storage for images before using uploads in production.
+
 ## Production notes
 
 - Set `NODE_ENV=production` and serve the site over HTTPS. The session cookie is marked secure in production.
